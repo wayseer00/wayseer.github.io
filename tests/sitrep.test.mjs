@@ -13,6 +13,27 @@ test('SITREP consumes the frozen skill-lib projection instead of redefining repo
   assert.match(source, /missingReports/);
 });
 
+test('SITREP current portfolio explicitly covers the evidence-bounded core graph', async () => {
+  const source = await readFile('scripts/fetch-sitrep.mjs', 'utf8');
+  for (const repository of [
+    'skill-lib',
+    'metapat',
+    'ucns',
+    'edcm',
+    'pcea',
+    'ptcna',
+    'epac',
+    'zfae',
+    'a0',
+    'stack',
+    'The-Interdependency.github.io'
+  ]) {
+    assert.match(source, new RegExp(repository.replaceAll('.', '\\.')));
+  }
+  assert.match(source, /Explicit portfolio membership/);
+  assert.doesNotMatch(source, /org-wide auto-discovery/i);
+});
+
 test('SITREP failure publication classifies errors instead of echoing command details', async () => {
   const source = await readFile('scripts/fetch-sitrep.mjs', 'utf8');
   assert.match(source, /function publicFailureReason/);
@@ -21,9 +42,13 @@ test('SITREP failure publication classifies errors instead of echoing command de
   assert.doesNotMatch(source, /reason:\s*error\.message/);
 });
 
-test('HEAD mismatch is exposed as difference without inferring substantive staleness', async () => {
+test('report-only coordination commits do not make a self-report stale by construction', async () => {
   const source = await readFile('scripts/fetch-sitrep.mjs', 'utf8');
-  assert.match(source, /sourceCommit === head \? 'current' : 'HEAD differs'/);
+  assert.match(source, /reportOnlyRefresh/);
+  assert.match(source, /parents/);
+  assert.match(source, /changedFiles/);
+  assert.match(source, /telemetry\.changedFiles\[0\] === localReportPath/);
+  assert.match(source, /sourceCommit === head \|\| reportOnlyRefresh \? 'current' : 'HEAD differs'/);
   assert.doesNotMatch(source, /sourceCommit === head \? 'current' : 'stale'/);
 });
 

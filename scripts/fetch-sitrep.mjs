@@ -14,7 +14,7 @@ import path from 'node:path';
 //   network: reads public GitHub repository metadata and repo-owned reports; optional token raises rate limits
 //   storage: writes generated and last-known-good SITREP JSON only
 //   authority: skill-lib owns the reporting contract and deterministic projection; each repository owns its report claims; this site owns presentation only
-//   failure: never reconstructs missing reports; never publishes raw command errors or credentials; missing or HEAD-different sources remain visible and a last-known-good projection may be used only with fallback=true
+//   failure: never reconstructs missing reports; never publishes raw command errors or credentials; missing or source-different reports remain visible and a last-known-good projection may be used only with fallback=true
 // === END BOUNDARIES ===
 // Usage: run `npm run refresh:sitrep`; the output is presentation data, not a new source of repository canon.
 
@@ -28,7 +28,7 @@ const localReportPath = 'docs/work-graphs/repository-plan-report.json';
 // reinterpret repo reports when skill-lib main changes.
 const controlPlane = {
   repository: `${org}/skill-lib`,
-  commit: '6ef2e4c123225f9db20e5230e5894c9c86b42ee6',
+  commit: 'c14ee9d500579a4b5d6821f62c9d82ca96e73608',
   skill: 'interdependent-work-graph',
   reportSchemaVersion: '1.0.0',
   reportSchemaPath: 'interdependent-work-graph/repository-plan-report.schema.json',
@@ -37,11 +37,20 @@ const controlPlane = {
   portfolioScriptBlob: '97b8b546b4151486164c8a4b730c24a8c895b25b'
 };
 
+// Explicit portfolio membership: this is the evidence-bounded core graph, not
+// organization-wide repository discovery. Repositories outside this set remain
+// outside the current projection until a deliberate membership decision adds them.
 const projectDefinitions = [
+  { repository: `${org}/skill-lib`, name: 'skill-lib', label: 'Skill Library', slug: 'skill-lib' },
   { repository: `${org}/metapat`, name: 'metapat', label: 'METAPAT', slug: 'metapat' },
   { repository: `${org}/ucns`, name: 'ucns', label: 'UCNS', slug: 'ucns' },
   { repository: `${org}/edcm`, name: 'edcm', label: 'EDCM', slug: 'edcm' },
+  { repository: `${org}/pcea`, name: 'pcea', label: 'PCEA', slug: 'pcea' },
+  { repository: `${org}/ptcna`, name: 'ptcna', label: 'PTCNA', slug: 'ptcna' },
+  { repository: `${org}/epac`, name: 'epac', label: 'EPAC', slug: 'epac' },
+  { repository: `${org}/zfae`, name: 'zfae', label: 'ZFAE', slug: 'zfae' },
   { repository: `${org}/a0`, name: 'a0', label: 'a0', slug: 'a0' },
+  { repository: `${org}/stack`, name: 'stack', label: 'Stack', slug: 'stack' },
   { repository: websiteRepository, name: 'The-Interdependency.github.io', label: 'Website', slug: 'website', localReport: true }
 ];
 
@@ -143,6 +152,8 @@ function collectTelemetry(definition) {
   return {
     branch,
     head: commit.sha || null,
+    parents: (commit.parents || []).map(parent => parent.sha).filter(Boolean),
+    changedFiles: (commit.files || []).map(file => file.filename).filter(Boolean),
     headDate: commit.commit?.committer?.date || commit.commit?.author?.date || null,
     pushedAt: repo.pushed_at || null,
     updatedAt: repo.updated_at || null,
@@ -162,8 +173,15 @@ function collectTelemetry(definition) {
 function projectView(definition, reportRecord, telemetry, portfolioView) {
   const sourceCommit = reportRecord?.report?.source?.commit || null;
   const head = telemetry?.head || null;
+  const reportOnlyRefresh = Boolean(
+    sourceCommit &&
+    head &&
+    (telemetry?.parents || []).includes(sourceCommit) &&
+    (telemetry?.changedFiles || []).length === 1 &&
+    telemetry.changedFiles[0] === localReportPath
+  );
   let reportFreshness = 'unknown';
-  if (sourceCommit && head) reportFreshness = sourceCommit === head ? 'current' : 'HEAD differs';
+  if (sourceCommit && head) reportFreshness = sourceCommit === head || reportOnlyRefresh ? 'current' : 'HEAD differs';
   else if (!reportRecord) reportFreshness = 'missing';
   return {
     ...definition,
